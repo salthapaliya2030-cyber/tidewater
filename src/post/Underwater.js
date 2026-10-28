@@ -90,6 +90,7 @@ export class Underwater {
 		// (rgb: in-scatter, a: the pixel's view distance for the depth-aware upsample in the composite)
 		this.shaftTarget = new RenderTarget( 1, 1, { colors: [ 'rgba16float' ], label: 'uwShafts' } );
 		this._shaftPass = null;
+		this.shaftsEnabled = true;
 
 	}
 
@@ -112,8 +113,9 @@ export class Underwater {
 	// record the half resolution march when any pixel can be under water (active), before the composite
 	renderShafts( active ) {
 
-		this.uniforms.fields.hasShafts.value = active ? 1 : 0;
-		if ( active ) this.shaftPass.render( { colorViews: [ this.shaftTarget.texture ], clear: [ 0, 0, 0, 0 ] } );
+		const run = this.shaftsEnabled && active;
+		this.uniforms.fields.hasShafts.value = run ? 1 : 0;
+		if ( run ) this.shaftPass.render( { colorViews: [ this.shaftTarget.texture ], clear: [ 0, 0, 0, 0 ] } );
 
 	}
 
