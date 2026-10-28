@@ -113,6 +113,11 @@ export class Engine {
 
 		const message = String( detail && ( detail.stack || detail.message ) || detail || 'No additional details were provided.' );
 		console.error( title, detail );
+		const key = title + '\n' + message;
+		this._runtimeErrorKeys ||= new Set();
+		if ( this._runtimeErrorKeys.has( key ) || this._runtimeErrorKeys.size >= 12 ) return;
+		this._runtimeErrorKeys.add( key );
+
 		let panel = document.getElementById( 'tidewater-runtime-error' );
 		if ( ! panel ) {
 
@@ -121,14 +126,26 @@ export class Engine {
 			panel.setAttribute( 'role', 'alert' );
 			panel.style.cssText = 'position:fixed;z-index:2147483647;left:16px;right:16px;bottom:16px;max-height:45vh;overflow:auto;box-sizing:border-box;padding:16px 18px;border:1px solid #e37b7b;border-radius:10px;background:rgba(20,12,16,.97);color:#fff;font:13px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace;white-space:pre-wrap;overflow-wrap:anywhere;box-shadow:0 8px 32px #0008;';
 			const heading = document.createElement( 'strong' );
+			heading.textContent = 'Tidewater graphics diagnostics — earliest errors first';
 			heading.style.cssText = 'display:block;font:600 15px/1.4 system-ui,sans-serif;margin-bottom:8px;color:#ffb4b4';
-			const detailEl = document.createElement( 'div' );
-			panel.append( heading, detailEl );
+			const list = document.createElement( 'div' );
+			list.id = 'tidewater-runtime-error-list';
+			panel.append( heading, list );
 			document.body.appendChild( panel );
 
 		}
-		panel.children[ 0 ].textContent = title;
-		panel.children[ 1 ].textContent = message;
+
+		const list = document.getElementById( 'tidewater-runtime-error-list' );
+		if ( ! list ) return;
+		const entry = document.createElement( 'section' );
+		entry.style.cssText = 'border-top:1px solid #54363c;padding:8px 0;margin-top:8px;';
+		const label = document.createElement( 'strong' );
+		label.textContent = title;
+		label.style.cssText = 'display:block;color:#ffd2a0;margin-bottom:4px;';
+		const text = document.createElement( 'div' );
+		text.textContent = message;
+		entry.append( label, text );
+		list.appendChild( entry );
 
 	}
 
