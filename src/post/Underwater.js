@@ -147,13 +147,34 @@ export class Underwater {
 
 	}
 
+	// The medium and composite only need the underwater depth/mask + water-height query.
+	// Keep caustics and flashlight modules out of these passes: they are only used by the
+	// shaft march, and their extra bindings can exceed a device's fragment-stage limits.
+	get compositeBaseModule() {
+
+		if ( this._compositeBaseModule ) return this._compositeBaseModule;
+		this._compositeBaseModule = new ShaderModule( {
+			name: 'underwater-composite-base',
+			deps: [ commonModule, this.query && this.query.module ],
+			uniforms: this.uniforms,
+			uniformName: 'underwaterParams',
+			bindings: {
+				underwaterDepth: { texture: () => this.depthTexture },
+				underwaterMask: { texture: () => this.maskTexture },
+			},
+			code: this._code(),
+		} );
+		return this._compositeBaseModule;
+
+	}
+
 	// the composite (needs the medium texture: not usable by the medium pass itself)
 	get compositeModule() {
 
 		if ( this._compositeModule ) return this._compositeModule;
 		this._compositeModule = new ShaderModule( {
 			name: 'underwater-composite',
-			deps: [ this.module ],
+			deps: [ this.compositeBaseModule ],
 			bindings: { underwaterMediumTex: { texture: () => this.mediumTexture }, underwaterShaftTex: { texture: () => this.shaftTarget.texture } },
 			code: this._compositeCode(),
 		} );
