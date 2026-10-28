@@ -545,7 +545,11 @@ export class MeshRenderer {
 
 			vl = this._cachedLayout( o, geo, material );
 			p = this._pipeline( material, vl, pass );
-			const pipeline = p.handle.pipeline || ( this.syncPipelines ? GPU.ready( p.handle ) : null );
+			// While the async path is preferred, never silently skip a mesh forever if its
+			// pipeline failed to compile. Retry synchronously so GPU.ready can surface the real
+			// shader/validation message to the on-screen runtime error handler.
+			let pipeline = p.handle.pipeline;
+			if ( ! pipeline && ( this.syncPipelines || p.handle.failed ) ) pipeline = GPU.ready( p.handle );
 			if ( ! pipeline ) continue; // still compiling
 			if ( p !== lastPipeline ) {
 
