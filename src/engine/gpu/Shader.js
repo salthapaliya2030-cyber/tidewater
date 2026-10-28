@@ -671,7 +671,9 @@ export function createShaderModule( code, label ) {
 
 			const a = Math.max( 0, e.lineNum - 4 ), b = Math.min( lines.length, e.lineNum + 2 );
 			const excerpt = lines.slice( a, b ).map( ( l, i ) => `${ a + i + 1 }${ a + i + 1 === e.lineNum ? '>' : ' ' } ${ l }` ).join( '\n' );
-			console.error( `WGSL error in ${ label } (${ e.lineNum }:${ e.linePos }): ${ e.message }\n${ excerpt }` );
+			const detail = `WGSL error in ${ label } (${ e.lineNum }:${ e.linePos }): ${ e.message }\n${ excerpt }`;
+			console.error( detail );
+			if ( typeof window !== 'undefined' && typeof window.__showTidewaterError === 'function' ) window.__showTidewaterError( `WGSL compilation error: ${ label }`, detail );
 
 		}
 
