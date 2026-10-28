@@ -8,6 +8,16 @@
 // range written twice in one frame keeps only the last value for every pass. Anything that changes
 // between passes of a frame needs its own buffer (or its own offset).
 
+function reportGPUError( title, detail ) {
+
+	if ( typeof window !== 'undefined' && typeof window.__showTidewaterError === 'function' ) {
+
+		window.__showTidewaterError( title, detail );
+
+	}
+
+}
+
 export const GPU = {
 
 	device: null,
@@ -90,8 +100,20 @@ export const GPU = {
 		this.device = device;
 		this.queue = device.queue;
 		this.limits = device.limits;
-		device.lost.then( ( info ) => console.error( 'WebGPU device lost:', info.message ) );
-		device.addEventListener && device.addEventListener( 'uncapturederror', ( e ) => console.error( 'WebGPU:', e.error.message.split( '\n' ).slice( 0, 6 ).join( '\n' ) ) );
+		device.lost.then( ( info ) => {
+
+			const message = 'Reason: ' + ( info.reason || 'unknown' ) + '\n' + ( info.message || 'The GPU device was lost without additional detail.' );
+			console.error( 'WebGPU device lost:', message );
+			reportGPUError( 'WebGPU device lost', message );
+
+		} );
+		device.addEventListener && device.addEventListener( 'uncapturederror', ( e ) => {
+
+			const message = String( e.error && e.error.message || e.message || e.error || e ).split( '\n' ).slice( 0, 10 ).join( '\n' );
+			console.error( 'WebGPU uncaptured error:', message );
+			reportGPUError( 'WebGPU validation/runtime error', message );
+
+		} );
 
 		if ( canvas && ! headless ) {
 
@@ -200,7 +222,9 @@ export const GPU = {
 
 				h.failed = true;
 				h.error = e;
-				console.error( `WebGPU: pipeline "${ desc.label }" failed asynchronously: ${ e.message.split( '\n' ).slice( 0, 6 ).join( '\n' ) }` );
+				const message = String( e && ( e.message || e ) ).split( '\n' ).slice( 0, 10 ).join( '\n' );
+				console.error( `WebGPU: pipeline "${ desc.label }" failed asynchronously: ${ message }` );
+				reportGPUError( `WebGPU pipeline failed: ${ desc.label }`, message );
 
 			} );
 
