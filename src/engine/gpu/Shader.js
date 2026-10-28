@@ -517,7 +517,7 @@ export function group0ForBlock( block, stage = 'render' ) {
 // Assemble a full WGSL source: structs, group 0/1 declarations, module code, main code.
 //   modules: ShaderModule[]; bindings: extra { name: spec } (material resources); code: main WGSL
 // returns { code, bindings: BindingSet (group 1), group0: BindingSet }
-export function composeShader( { modules = [], bindings = {}, code = '', defines = {}, stage = 'render', label = 'shader', header = '' } ) {
+export function composeShader( { modules = [], bindings = {}, code = '', defines = {}, stage = 'render', label = 'shader', header = '', entryPoint = null } ) {
 
 	const mods = collectModules( modules );
 	const specs = {};
@@ -531,7 +531,20 @@ export function composeShader( { modules = [], bindings = {}, code = '', defines
 	for ( const k in bindings ) specs[ k ] = bindings[ k ];
 	let stageOf = null;
 	let demote = null;
-	if ( stage === 'render' && /@vertex\s+fn\s+vs\b/.test( code ) ) {
+	if ( stage === 'compute' ) {
+
+		// Compute modules often bring along resources for helpers that a particular kernel never
+		// calls. Include only resources reachable from that kernel's entry point in its stage limits.
+		let all = '';
+		for ( const m of mods ) all += m.code + '\\n';
+		const full = preprocess( all + code, defines );
+		const match = /@compute\\b[^{};]*?\\bfn\\s+(\\w+)\\s*\\(/s.exec( code );
+		const entry = entryPoint || ( match ? match[ 1 ] : 'main' );
+		const used = reachableIdentifiers( full, entry );
+		stageOf = {};
+		for ( const k in specs ) stageOf[ k ] = used.has( k ) ? 'compute' : 'none';
+
+	} else if ( stage === 'render' && /@vertex\\s+fn\\s+vs\\b/.test( code ) ) {
 
 		// bindings only one entry point can reach are declared for that stage only (per-stage limits:
 		// 12 uniform buffers, 16 sampled textures on some adapters)
