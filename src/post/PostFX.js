@@ -320,7 +320,7 @@ fn fragment( in: FSIn ) -> vec4f {
 		// build the lazily built passes now (the profiler tracks them after beginFrame)
 		if ( this.aoEnabled && ! this.aoPass._pass ) this.aoPass._build();
 		if ( haze && ! haze._passes ) haze._build();
-		if ( uw.renderShafts ) void uw.shaftPass;
+		if ( uw.shaftsEnabled && uw.renderShafts ) void uw.shaftPass;
 
 		// ---- bloom
 		this._buildBloom();
@@ -676,7 +676,7 @@ fn fragment( in: FSIn ) -> vec4f {
 		this._mediumPass.render( { colorViews: [ this.medium.texture ], clear: CLR } );
 		// caustic shafts / torch beam march (half res): only while the lens can be under water (the CPU
 		// water height lags the GPU's by a frame: 1 m of margin)
-		if ( this.underwater.renderShafts ) this.underwater.renderShafts( this.camera.position.y < G.cameraWaterHeight.value + LENS_REACH + 1.0 );
+		if ( this.underwater.shaftsEnabled && this.underwater.renderShafts ) this.underwater.renderShafts( this.camera.position.y < G.cameraWaterHeight.value + LENS_REACH + 1.0 );
 		if ( this.haze ) {
 
 			this.haze.update();
