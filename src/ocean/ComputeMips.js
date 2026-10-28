@@ -17,7 +17,7 @@ export class ComputeMips {
 		this.res = res;
 		this.layers = tex.dimension === '3d' ? 1 : tex.depth;
 		const levels = tex.mipLevelCount;
-		const top = Math.min( 5, levels - 1 );
+		const top = Math.min( 4, levels - 1 );
 		const out = ( l ) => ( { storageTexture: tex, access: 'write', view: { dimension: '2d-array', baseMipLevel: l, mipLevelCount: 1 } } );
 		const src = ( l ) => ( { texture: tex, view: { dimension: '2d-array', baseMipLevel: l, mipLevelCount: 1 } } );
 		// threads (lx, ly) < width reduce 2x2 of `from` (row 2 * width) into level lvl (and `to`)
@@ -57,9 +57,29 @@ ${ codeA }
 }`,
 		} );
 
-		// level 5 is res / 32 texels square
-		this.kernelB = null;
+		// Level 5 is generated in its own dispatch: level 1..4 uses four storage-texture
+		// bindings, and level 5 adds only one more in a separate kernel (WebGPU guarantees four).
+		this.kernelA5 = null;
 		const w5 = res >> 5;
+		if ( levels > 5 ) {
+
+			this.kernelA5 = new ComputeKernel( {
+				label: label + ' mips A5',
+				bindings: { src4: src( 4 ), out5: out( 5 ) },
+				workgroupSize: [ 8, 8, 1 ],
+				code: /* wgsl */\`
+@compute @workgroup_size( WG_X, WG_Y, WG_Z )
+fn main( @builtin( global_invocation_id ) gid: vec3u ) {
+	if ( gid.x >= \${ w5 }u || gid.y >= \${ w5 }u ) { return; }
+	let p = vec2u( gid.xy ) * 2u;
+	let v = ( textureLoad( src4, p, gid.z, 0 ) + textureLoad( src4, p + vec2u( 1u, 0u ), gid.z, 0 ) + textureLoad( src4, p + vec2u( 0u, 1u ), gid.z, 0 ) + textureLoad( src4, p + vec2u( 1u, 1u ), gid.z, 0 ) ) * 0.25;
+	textureStore( out5, gid.xy, gid.z, v );
+}\`,
+			} );
+
+		}
+
+		this.kernelB = null;
 		if ( levels > 6 && w5 > 1 ) {
 
 			const bB = { src5: src( 5 ) };
@@ -100,6 +120,7 @@ ${ codeB }
 
 		const o = pass ? { pass } : undefined;
 		this.kernelA.dispatch( [ this.res / 32, this.res / 32, this.layers ], o );
+		if ( this.kernelA5 ) this.kernelA5.dispatch( [ Math.ceil( ( this.res >> 5 ) / 8 ), Math.ceil( ( this.res >> 5 ) / 8 ), this.layers ], o );
 		if ( this.kernelB ) this.kernelB.dispatch( [ 1, 1, this.layers ], o );
 
 	}
