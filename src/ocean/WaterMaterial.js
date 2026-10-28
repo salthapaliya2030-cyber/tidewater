@@ -1,4 +1,4 @@
-import { Material, ShaderModule, G } from '../engine/webgpu.js';
+import { GPU, Material, ShaderModule, G } from '../engine/webgpu.js';
 import { commonModule } from '../engine/render/wgsl/common.js';
 import { whaleWaterModule } from './WhaleWater.js';
 import { REFRACTION_GUARD } from './RefractionPass.js';
@@ -152,21 +152,26 @@ export class WaterMaterial extends Material {
 		this._built = true;
 		const S = this.waterSurface;
 		const sky = this.sky;
-		const T = !! S.terrain;
-		const SH = !! S.shore;
-		const SIM = !! S.shoreSim;
+		// Limit fragment-stage textures on adapters with fewer than 24 slots. The core water surface
+		// remains, while costly optional features are excluded at shader-build time (not just hidden
+		// behind runtime branches, which still count against WebGPU's per-stage limit).
+		const lowTextureBudget = ( GPU.limits?.maxSampledTexturesPerShaderStage ?? 16 ) < 24;
+		const T = ! lowTextureBudget && !! S.terrain;
+		const SH = ! lowTextureBudget && !! S.shore;
+		const SIM = ! lowTextureBudget && !! S.shoreSim;
 		const SF = !! S.surfFoam;
-		const CL = !! ( this.clouds && this.clouds.module );
-		const HULL = !! ( this.hullMaskTexture && this.hullMaskActive );
-		const REFL = !! ( this.reflection && this.reflection.module );
+		const CL = ! lowTextureBudget && !! ( this.clouds && this.clouds.module );
+		const HULL = ! lowTextureBudget && !! ( this.hullMaskTexture && this.hullMaskActive );
+		const REFL = ! lowTextureBudget && !! ( this.reflection && this.reflection.module );
 
 		this.modules = [ commonModule, waterFresnelModule, waterHelpersModule, whaleWaterModule, S.module, sky && sky.module, CL && this.clouds.module,
 			SIM && S.shoreSim.module, REFL && this.reflection.module, this.cameraWaterHeightNode && this.cameraWaterHeightNode.module ].filter( Boolean );
 		this.bindings.waterSceneColor = { texture: this.sceneColorTexture };
 		this.bindings.waterSceneDepth = { texture: this.sceneDepthTexture, sampleType: 'unfilterable-float' };
-		if ( this.sceneDepthHalfTexture ) this.bindings.waterSceneDepthHalf = { texture: this.sceneDepthHalfTexture };
-		this.setDefine( 'WATER_DEPTH_HALF', this.sceneDepthHalfTexture ? 1 : 0 );
-		const REFR = !! this.refraction;
+		const useHalfDepth = ! lowTextureBudget && !! this.sceneDepthHalfTexture;
+		if ( useHalfDepth ) this.bindings.waterSceneDepthHalf = { texture: this.sceneDepthHalfTexture };
+		this.setDefine( 'WATER_DEPTH_HALF', useHalfDepth ? 1 : 0 );
+		const REFR = ! lowTextureBudget && !! this.refraction;
 		if ( REFR ) {
 
 			this.bindings.waterRefrColor = { texture: this.refraction.texture };
