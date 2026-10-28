@@ -554,12 +554,12 @@ ${ stages }
 				out1: level( tex, 1 ), out2: level( tex, 2 ), out3: level( tex, 3 ), out4: level( tex, 4 ),
 			},
 			workgroupSize: [ 16, 16, 1 ],
-			code: /* wgsl */\`
+			code: /* wgsl */`
 var<workgroup> s1: array<vec4f, 256>;
 var<workgroup> s2: array<vec4f, 64>;
 var<workgroup> s3: array<vec4f, 16>;
 var<workgroup> s4: array<vec4f, 4>;
-fn src( c: u32, x: u32, y: u32 ) -> vec4f { return mipSrc[ ( c * \${ N * N }u + y * \${ N }u + x ) * 2u + \${ t }u ]; }
+fn src( c: u32, x: u32, y: u32 ) -> vec4f { return mipSrc[ ( c * ${ N * N }u + y * ${ N }u + x ) * 2u + ${ t }u ]; }
 @compute @workgroup_size( WG_X, WG_Y, WG_Z )
 fn main( @builtin( local_invocation_id ) lid: vec3u, @builtin( workgroup_id ) wid: vec3u ) {
 	let lx = lid.x; let ly = lid.y;
@@ -570,12 +570,12 @@ fn main( @builtin( local_invocation_id ) lid: vec3u, @builtin( workgroup_id ) wi
 	textureStore( out1, vec2u( x1, y1 ), c, v1 );
 	s1[ ly * 16u + lx ] = v1;
 	workgroupBarrier();
-\${ reduce( 's1', 's2', 8, 2, t ) }
+${ reduce( 's1', 's2', 8, 2, t ) }
 	workgroupBarrier();
-\${ reduce( 's2', 's3', 4, 3, t ) }
+${ reduce( 's2', 's3', 4, 3, t ) }
 	workgroupBarrier();
-\${ reduce( 's3', 's4', 2, 4, t ) }
-}\`,
+${ reduce( 's3', 's4', 2, 4, t ) }
+}`,
 		} );
 
 		// Level 5 has its own dispatch, keeping each mip kernel at or below four storage textures.
@@ -586,15 +586,15 @@ fn main( @builtin( local_invocation_id ) lid: vec3u, @builtin( workgroup_id ) wi
 				mipMid: rw( this.mipMid ), out5: level( tex, 5 ),
 			},
 			workgroupSize: [ 8, 8, 1 ],
-			code: /* wgsl */\`
+			code: /* wgsl */`
 @compute @workgroup_size( WG_X, WG_Y, WG_Z )
 fn main( @builtin( global_invocation_id ) gid: vec3u ) {
-	if ( gid.x >= \${ N / 32 }u || gid.y >= \${ N / 32 }u ) { return; }
+	if ( gid.x >= ${ N / 32 }u || gid.y >= ${ N / 32 }u ) { return; }
 	let p = gid.xy * 2u;
 	let v = ( textureLoad( in4, p, gid.z, 0 ) + textureLoad( in4, p + vec2u( 1u, 0u ), gid.z, 0 ) + textureLoad( in4, p + vec2u( 0u, 1u ), gid.z, 0 ) + textureLoad( in4, p + vec2u( 1u, 1u ), gid.z, 0 ) ) * 0.25;
 	textureStore( out5, gid.xy, gid.z, v );
-	mipMid[ ( gid.z * 64u + gid.y * 8u + gid.x ) * 2u + \${ t }u ] = v;
-}\`,
+	mipMid[ ( gid.z * 64u + gid.y * 8u + gid.x ) * 2u + ${ t }u ] = v;
+}`,
 		} );
 
 		const mipB = ( tex, t ) => new ComputeKernel( {
