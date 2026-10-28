@@ -250,7 +250,7 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 
 		} );
 		// the sea is not drawn inside the boat (its hull volume masks the surface)
-		this.sceneRenderer.addHullMask( this.boat.createHullVolumeGeometry(), this.boat.group );
+		if ( ! this.lowPower ) this.sceneRenderer.addHullMask( this.boat.createHullVolumeGeometry(), this.boat.group );
 		this.waterMaterial = new WaterMaterial( {
 			surface: this.surface, sky: this.sky, sceneCopy: this.sceneRenderer.opaqueCopy, sceneDepthHalf: this.sceneRenderer.opaqueDepthHalf.texture, refraction: this.refraction,
 			hullMask: this.sceneRenderer.hullMaskRT.texture, hullMaskActive: this.sceneRenderer.hullMaskActive,
@@ -705,7 +705,7 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 		// uniforms (setFrameCamera); shadows then render with this frame's sun and camera
 		this.post.beginFrame();
 		this.underwater.updateCamera( this.camera );
-		this.shadows.render( this.scene, this.engine.meshRenderer, this.shadows.update( this.camera, G.sunDir.value ) );
+		if ( ! this.lowPower ) this.shadows.render( this.scene, this.engine.meshRenderer, this.shadows.update( this.camera, G.sunDir.value ) );
 		this.sceneRenderer.render();
 		if ( this.post.flare ) this.post.flare.kernel.dispatch( 1 );
 		this.post.render();
