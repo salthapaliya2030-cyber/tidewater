@@ -615,25 +615,32 @@ export function composeShader( { modules = [], bindings = {}, code = '', defines
 // Identifiers reachable from function `entry` through the call graph of the top-level functions.
 export function reachableIdentifiers( code, entry ) {
 
+	// Documentation comments frequently mention functions (e.g. "fn terrainHeight(...)").
+	// Scanning them as code lets the brace matcher jump into a later real function and corrupts
+	// reachability, causing unused module textures to remain visible to every shader stage.
+	// Blank comments while preserving newlines so entry-point decoration checks still work.
+	const source = code
+		.replace( /\/\*[\s\S]*?\*\//g, ( comment ) => comment.replace( /[^\n]/g, ' ' ) )
+		.replace( /\/\/[^\n]*/g, ( comment ) => ' '.repeat( comment.length ) );
 	const fns = new Map();
 	const re = /\bfn\s+([A-Za-z_]\w*)\s*\(/g;
 	let m;
-	while ( ( m = re.exec( code ) ) ) {
+	while ( ( m = re.exec( source ) ) ) {
 
-		const open = code.indexOf( '{', m.index );
+		const open = source.indexOf( '{', m.index );
 		if ( open < 0 ) break;
 		let depth = 0, i = open;
-		for ( ; i < code.length; i ++ ) {
+		for ( ; i < source.length; i ++ ) {
 
-			const c = code[ i ];
-			if ( c === '{' ) depth ++;
-			else if ( c === '}' && -- depth === 0 ) break;
+			const ch = source[ i ];
+			if ( ch === '{' ) depth ++;
+			else if ( ch === '}' && -- depth === 0 ) break;
 
 		}
 
-		// entry points are never called (a local variable named like one must not pull it in)
-		const isEntry = /@(vertex|fragment|compute)[^;{}]*$/.test( code.slice( Math.max( 0, m.index - 80 ), m.index ) );
-		if ( ! isEntry || m[ 1 ] === entry ) fns.set( m[ 1 ], code.slice( m.index, i + 1 ) );
+		// Entry points are never called (a local variable named like one must not pull it in).
+		const isEntry = /@(vertex|fragment|compute)[^;{}]*$/.test( source.slice( Math.max( 0, m.index - 80 ), m.index ) );
+		if ( ! isEntry || m[ 1 ] === entry ) fns.set( m[ 1 ], source.slice( m.index, i + 1 ) );
 		re.lastIndex = i + 1;
 
 	}
@@ -643,10 +650,10 @@ export function reachableIdentifiers( code, entry ) {
 	const seen = new Set();
 	while ( queue.length ) {
 
-		const f = queue.pop();
-		if ( seen.has( f ) || ! fns.has( f ) ) continue;
-		seen.add( f );
-		for ( const id of fns.get( f ).match( /[A-Za-z_]\w*/g ) || [] ) {
+		const fn = queue.pop();
+		if ( seen.has( fn ) || ! fns.has( fn ) ) continue;
+		seen.add( fn );
+		for ( const id of fns.get( fn ).match( /[A-Za-z_]\w*/g ) || [] ) {
 
 			used.add( id );
 			if ( fns.has( id ) && ! seen.has( id ) ) queue.push( id );
