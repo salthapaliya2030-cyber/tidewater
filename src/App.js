@@ -100,6 +100,9 @@ export class App {
 		await progress( 0.02, 'Starting WebGPU…' );
 		const engine = this.engine = new Engine( document.getElementById( 'app' ) );
 		await engine.init();
+		// Detect the adapter's actual texture budget and switch to the baseline GPU profile.
+		this.lowPower = this.lowPower || ( ( GPU.limits?.maxSampledTexturesPerShaderStage ?? 32 ) < 24 );
+		if ( this.lowPower ) this.settings.renderScale = 0.45;
 		// systems take `renderer` first as in the three.js version: it is the Engine now (GPU access is global)
 		const renderer = engine;
 		const { scene, camera } = engine;
@@ -222,17 +225,17 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 		underwaterMode( this.boat.group, 'lite' );
 		if ( this.vegetation ) underwaterMode( this.vegetation.group, 'none' );
 
-		this.underwaterLighting = installUnderwaterLighting( {
+		this.underwaterLighting = this.lowPower ? { update() {} } : installUnderwaterLighting( {
 			fft: this.fft, caustics: this.caustics, clouds: this.clouds, terrain: this.terrainGPU,
 			shore: this.shore, surface: this.surface, shoreSim: this.shoreSim,
 		} );
 
 		// sunlight bounced off the ground (one diffuse bounce, re-baked with the terrain sun shadow)
-		installGroundBounce( { terrain: this.terrainGPU, clouds: this.clouds } );
+		if ( ! this.lowPower ) installGroundBounce( { terrain: this.terrainGPU, clouds: this.clouds } );
 		this.sceneRenderer = new SceneRenderer( engine.meshRenderer, scene, camera );
 		// the water's refraction source: the scene below the water only, half resolution
-		this.refraction = new RefractionPass( { meshRenderer: engine.meshRenderer, scene, camera, sceneRenderer: this.sceneRenderer, scale: 0.5 } );
-		this.sceneRenderer.onBeforeWater = () => this.refraction.render( G.seaLevel.value );
+		this.refraction = this.lowPower ? null : new RefractionPass( { meshRenderer: engine.meshRenderer, scene, camera, sceneRenderer: this.sceneRenderer, scale: 0.5 } );
+		this.sceneRenderer.onBeforeWater = this.refraction ? () => this.refraction.render( G.seaLevel.value ) : null;
 		if ( this.sky.background ) this.sceneRenderer.background = this.sky.background;
 		// lanterns, lamp posts, path lights, lit windows, the boat's cabin / navigation lights and the
 		// flashlight (L): nearest few packed into one small uniform array each frame
@@ -285,11 +288,11 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 		this.spray = new Spray( renderer, { query: this.query, terrain: this.terrainGPU, sceneCopy: this.sceneRenderer.opaqueCopy, clouds: this.clouds } );
 		scene.add( this.spray.mesh );
 		if ( this.reef.setSpray ) this.reef.setSpray( this.spray ); // splashes of leaping fish
-		this.breakers = new Breakers( renderer, {
+		this.breakers = this.lowPower ? null : new Breakers( renderer, {
 			surface: this.surface, shore: this.shore, terrainData: this.terrainData, sky: this.sky,
 			spray: this.spray, clouds: this.clouds,
 		} );
-		scene.add( this.breakers.mesh );
+		if ( this.breakers ) scene.add( this.breakers.mesh );
 		// dust, pollen, salt aerosol, seed fluff and gnats drifting around the camera
 		this.airMotes = new AirMotes( { terrain: this.terrainGPU, clouds: this.clouds, csm: this.csm, reversedDepth: true } );
 		scene.add( this.airMotes.mesh );
@@ -310,8 +313,8 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 		}
 
 		// interactive wake around the boat (Kelvin pattern, bow/stern waves, prop wash foam)
-		this.wake = new WakeSim( renderer, { terrainGPU: this.terrainGPU, boat: this.boatCtl, colliders: this.colliders } );
-		this.surface.wake = this.wake;
+		this.wake = this.lowPower ? null : new WakeSim( renderer, { terrainGPU: this.terrainGPU, boat: this.boatCtl, colliders: this.colliders } );
+		if ( this.wake ) this.surface.wake = this.wake;
 		this.player = new Player( { camera, input: this.input, terrain: this.terrainData, colliders: this.colliders, query: this.query, boat: this.boatCtl, reef: this.reef } );
 		// birds, beach crabs, sanderlings (after spray / query / boat, which they use)
 		this.wildlife = new Wildlife( {
@@ -397,7 +400,7 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 	async precompile() {
 
 		const mr = this.engine.meshRenderer;
-		const refr = this.refraction.enabled;
+		const refr = this.refraction?.enabled;
 		// compute / post pipelines were requested while the systems were built: let them finish first
 		// (the frame below would otherwise compile each one again, synchronously); the post chain
 		// builds its passes on first use, so build it now
@@ -410,7 +413,7 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 
 		await GPU.pipelinesReady();
 		mr.precompiling = true;
-		this.refraction.enabled = true;
+		if ( this.refraction ) this.refraction.enabled = true;
 		const sr = this.sceneRenderer, hm = sr.hullMaskRT;
 		if ( sr.hullMasks.length ) mr.render( sr.hullMaskScene, {
 			label: 'hull mask', kind: 'color', camera: this.camera, colorViews: [ hm.texture.view() ], colorFormats: hm.formats,
@@ -434,7 +437,7 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 
 		this.waterMaterial.hullOverride = null;
 		mr.precompiling = false;
-		this.refraction.enabled = refr;
+		if ( this.refraction ) this.refraction.enabled = refr;
 		await GPU.pipelinesReady();
 		await GPU.queue.onSubmittedWorkDone();
 
@@ -628,7 +631,7 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 		}
 		this.boatCtl.update( dt );
 		this.boatSpray.update( dt );
-		this.wake.update( dt );
+		if ( this.wake ) this.wake.update( dt );
 		if ( this.freeCam ) this.fly.update( dt );
 		else this.player.update( dt );
 		this.game.update( dt );
@@ -658,8 +661,8 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 		this.marineSnow.update( this.camera, this.camera.position.y < ( this.cameraWaterHeight ?? 0 ) + LENS_REACH );
 		this.airMotes.update( dt, this.camera, this.cameraWaterHeight ?? 0 );
 		if ( this.shoreSim ) this.shoreSim.update();
-		this.underwaterLighting.update( this.camera );
-		this.breakers.update( this.camera );
+		if ( this.underwaterLighting ) this.underwaterLighting.update( this.camera );
+		if ( this.breakers ) this.breakers.update( this.camera );
 		this.spray.update();
 		if ( this.clouds ) this.clouds.update( dt, this.camera );
 		this.environment.update( dt );
