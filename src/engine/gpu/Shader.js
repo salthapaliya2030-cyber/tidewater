@@ -335,8 +335,9 @@ export class BindingSet {
 
 			const l = this.described[ i ].layout;
 			const st = stageOf[ this.names[ i ] ];
-			if ( st === 'fragment' && ( l.visibility & GPUShaderStage.FRAGMENT ) ) l.visibility = GPUShaderStage.FRAGMENT;
-			if ( st === 'vertex' && ( l.visibility & GPUShaderStage.VERTEX ) ) l.visibility = GPUShaderStage.VERTEX;
+			if ( st === 'none' ) l.visibility = 0;
+			else if ( st === 'fragment' && ( l.visibility & GPUShaderStage.FRAGMENT ) ) l.visibility = GPUShaderStage.FRAGMENT;
+			else if ( st === 'vertex' && ( l.visibility & GPUShaderStage.VERTEX ) ) l.visibility = GPUShaderStage.VERTEX;
 
 		}
 
@@ -542,8 +543,12 @@ export function composeShader( { modules = [], bindings = {}, code = '', defines
 		stageOf = {};
 		for ( const k in specs ) {
 
-			if ( ! usedV.has( k ) && ( ! usedF || usedF.has( k ) ) ) stageOf[ k ] = 'fragment';
-			else if ( usedF && ! usedF.has( k ) && usedV.has( k ) ) stageOf[ k ] = 'vertex';
+			const v = usedV.has( k );
+			const f = usedF ? usedF.has( k ) : false;
+			if ( v && f ) continue; // both stages really use it
+			if ( v ) stageOf[ k ] = 'vertex';
+			else if ( f ) stageOf[ k ] = 'fragment';
+			else stageOf[ k ] = 'none'; // dependencies often declare resources unused by this entry point; do not charge them to either stage
 
 		}
 
