@@ -27,9 +27,38 @@ export const GPU = {
 
 	async init( { canvas = null, requiredLimits = {}, headless = false } = {} ) {
 
-		if ( ! navigator.gpu ) throw new Error( 'WebGPU is not available in this browser.' );
-		const adapter = await navigator.gpu.requestAdapter( { powerPreference: 'high-performance' } );
-		if ( ! adapter ) throw new Error( 'No WebGPU adapter found.' );
+		if ( ! navigator.gpu ) {
+
+			throw new Error( 'WebGPU is unavailable in this browser. Update Chrome or Edge and enable hardware acceleration. Tidewater needs a WebGPU-capable graphics device; lowering graphics settings cannot add WebGPU support.' );
+
+		}
+
+		// Some laptops and managed Chromebooks do not return an adapter for the high-performance
+		// hint even when a usable integrated GPU exists. Try low-power and default selection too.
+		let adapter = null;
+		let adapterError = null;
+		for ( const options of [ { powerPreference: 'high-performance' }, { powerPreference: 'low-power' }, undefined ] ) {
+
+			try {
+
+				adapter = options ? await navigator.gpu.requestAdapter( options ) : await navigator.gpu.requestAdapter();
+				if ( adapter ) break;
+
+			} catch ( e ) {
+
+				adapterError = e;
+
+			}
+
+		}
+
+		if ( ! adapter ) {
+
+			const detail = adapterError && adapterError.message ? ` (${ adapterError.message })` : '';
+			throw new Error( 'No WebGPU adapter could be created. Update the browser and graphics driver, and enable hardware acceleration. This device may not support Tidewater.' + detail );
+
+		}
+
 		this.adapter = adapter;
 
 		const L = adapter.limits;
