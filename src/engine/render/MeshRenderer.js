@@ -336,6 +336,10 @@ export class MeshRenderer {
 	_createPipeline( material, vl, pass, key ) {
 
 		const src = buildMeshShader( material, vl.layout, pass );
+		// Some integrated GPUs expose only the WebGPU minimum of 16 sampled textures per stage.
+		// The full world-lighting hook chain can exceed that even though the adapter is usable; use
+		// the texture-free studio environment on constrained devices so the world still renders.
+		if ( ( GPU.limits?.maxSampledTexturesPerShaderStage ?? 16 ) < 24 && material.lit ) src.defines.STUDIO_LIGHTING = 1;
 		const c = composeShader( { modules: src.modules, bindings: src.bindings, code: src.code, defines: src.defines, stage: 'render', label: material.name } );
 		const module = createShaderModule( c.code, material.name );
 		this._ensureDrawBuffer();
