@@ -7,6 +7,12 @@ breach. It runs directly on WebGPU and WGSL with its own small rendering engine,
 
 **Play it:** https://dgreenheck.github.io/tidewater/
 
+**Play this Vercel copy:** https://tidewater-sal-c0ef.vercel.app/
+
+**Low-power mode:** https://tidewater-sal-c0ef.vercel.app/?low
+
+Tidewater requires WebGPU and hardware acceleration. If the page reports that WebGPU is unavailable, update Chrome/Edge, enable graphics acceleration in `chrome://settings/system`, and check `chrome://gpu` for WebGPU support. Low-power mode reduces render cost but cannot add WebGPU support to an unsupported device.
+
 **Deploy your own copy:** [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fsalthapaliya2030-cyber%2Ftidewater)
 
 *The button imports this repository into your own Vercel account. GitHub/Vercel sign-in or authorization may be required.*
