@@ -382,9 +382,19 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 		// frames behind the loading screen so any remaining first-use stalls happen there
 		// stage weights: in the browser the pipeline compile below takes far longer than everything before it
 		await progress( 0.36, 'Compiling shaders…', 0.95 );
-		await this.precompile();
-		await progress( 0.96, 'Warming up…' );
-		for ( let i = 0; i < 2; i ++ ) {
+		if ( ! this.lowPower ) {
+
+			await this.precompile();
+
+		} else {
+
+			// The full precompile sweep builds every shadow/depth/hull variant for every material. On
+			// baseline GPUs this can exceed driver resources; compile the needed visible variants on demand.
+			await GPU.pipelinesReady();
+
+		}
+		await progress( 0.96, this.lowPower ? 'Starting low-power scene…' : 'Warming up…' );
+		if ( ! this.lowPower ) for ( let i = 0; i < 2; i ++ ) {
 
 			this.frame( 1 / 60 );
 			await GPU.queue.onSubmittedWorkDone();
