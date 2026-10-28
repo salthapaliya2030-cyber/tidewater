@@ -25,6 +25,8 @@ export class Engine {
 		this.container.appendChild( canvas );
 		this.canvas = canvas;
 		this.domElement = canvas;
+		// Let the GPU layer surface validation/device-loss errors to users without DevTools.
+		window.__showTidewaterError = ( title, detail ) => this.showRuntimeError( title, detail );
 		await GPU.init( { canvas } );
 		this.meshRenderer = new MeshRenderer();
 		this.meshRenderer.syncPipelines = false; // compile in the background (App.precompile waits for them)
@@ -95,21 +97,7 @@ export class Engine {
 				// Show the actual runtime / WebGPU pipeline error on screen so it can be diagnosed without DevTools.
 				console.error( 'Tidewater frame stopped:', error );
 				this.stop();
-				if ( ! document.getElementById( 'tidewater-runtime-error' ) ) {
-
-					const panel = document.createElement( 'div' );
-					panel.id = 'tidewater-runtime-error';
-					panel.setAttribute( 'role', 'alert' );
-					panel.style.cssText = 'position:fixed;z-index:2147483647;left:16px;right:16px;bottom:16px;max-height:45vh;overflow:auto;box-sizing:border-box;padding:16px 18px;border:1px solid #e37b7b;border-radius:10px;background:rgba(20,12,16,.97);color:#fff;font:13px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace;white-space:pre-wrap;overflow-wrap:anywhere;box-shadow:0 8px 32px #0008;';
-					const heading = document.createElement( 'strong' );
-					heading.textContent = 'Tidewater stopped rendering';
-					heading.style.cssText = 'display:block;font:600 15px/1.4 system-ui,sans-serif;margin-bottom:8px;color:#ffb4b4';
-					const detail = document.createElement( 'div' );
-					detail.textContent = String( error && ( error.stack || error.message ) || error );
-					panel.append( heading, detail );
-					document.body.appendChild( panel );
-
-				}
+				this.showRuntimeError( 'Tidewater stopped rendering', error );
 				return;
 
 			}
@@ -118,6 +106,29 @@ export class Engine {
 		};
 
 		this._raf = requestAnimationFrame( loop );
+
+	}
+
+	showRuntimeError( title, detail ) {
+
+		const message = String( detail && ( detail.stack || detail.message ) || detail || 'No additional details were provided.' );
+		console.error( title, detail );
+		let panel = document.getElementById( 'tidewater-runtime-error' );
+		if ( ! panel ) {
+
+			panel = document.createElement( 'div' );
+			panel.id = 'tidewater-runtime-error';
+			panel.setAttribute( 'role', 'alert' );
+			panel.style.cssText = 'position:fixed;z-index:2147483647;left:16px;right:16px;bottom:16px;max-height:45vh;overflow:auto;box-sizing:border-box;padding:16px 18px;border:1px solid #e37b7b;border-radius:10px;background:rgba(20,12,16,.97);color:#fff;font:13px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace;white-space:pre-wrap;overflow-wrap:anywhere;box-shadow:0 8px 32px #0008;';
+			const heading = document.createElement( 'strong' );
+			heading.style.cssText = 'display:block;font:600 15px/1.4 system-ui,sans-serif;margin-bottom:8px;color:#ffb4b4';
+			const detailEl = document.createElement( 'div' );
+			panel.append( heading, detailEl );
+			document.body.appendChild( panel );
+
+		}
+		panel.children[ 0 ].textContent = title;
+		panel.children[ 1 ].textContent = message;
 
 	}
 
