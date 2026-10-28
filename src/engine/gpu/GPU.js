@@ -190,6 +190,38 @@ export const GPU = {
 	// Handles are { pipeline, label }; `pipeline` is null until the compile finishes. Users that must
 	// run this frame (compute, post) call ready( handle ), which falls back to a synchronous create.
 	_pending: new Set(),
+	_compileQueue: [],
+	_activeCompiles: 0,
+	// Constrained integrated GPUs can lose their device if dozens of heavy pipelines compile together.
+	_enqueueCompile( fn ) {
+
+		return new Promise( ( resolve, reject ) => {
+
+			this._compileQueue.push( { fn, resolve, reject } );
+			this._drainCompileQueue();
+
+		} );
+
+	},
+
+	_drainCompileQueue() {
+
+		const limit = ( this.limits?.maxSampledTexturesPerShaderStage ?? 32 ) < 24 ? 3 : 8;
+		while ( this._activeCompiles < limit && this._compileQueue.length ) {
+
+			const task = this._compileQueue.shift();
+			this._activeCompiles ++;
+			Promise.resolve().then( task.fn ).then( task.resolve, task.reject ).finally( () => {
+
+				this._activeCompiles --;
+				this._drainCompileQueue();
+
+			} );
+
+		}
+
+	},
+
 	syncCompiles: [], // labels of pipelines needed before their async compile finished (diagnostics)
 
 	renderPipeline( desc ) {
@@ -207,9 +239,9 @@ export const GPU = {
 	_async( desc, kind ) {
 
 		const h = { pipeline: null, label: desc.label, desc, kind, failed: false };
-		// started after the current task: a kernel dispatched right after it was made (a one-off bake)
-		// compiles once, synchronously, instead of twice
-		const p = Promise.resolve().then( () => {
+		// Keep device-heavy work bounded on the WebGPU baseline profile. Requests can be queued
+		// together, but only a few pipelines compile at once during startup on integrated GPUs.
+		const p = this._enqueueCompile( () => {
 
 			if ( h.pipeline ) return;
 			const create = kind === 'render' ? this.device.createRenderPipelineAsync : this.device.createComputePipelineAsync;
@@ -223,8 +255,8 @@ export const GPU = {
 				h.failed = true;
 				h.error = e;
 				const message = String( e && ( e.message || e ) ).split( '\n' ).slice( 0, 10 ).join( '\n' );
-				console.error( `WebGPU: pipeline "${ desc.label }" failed asynchronously: ${ message }` );
-				reportGPUError( `WebGPU pipeline failed: ${ desc.label }`, message );
+				console.error( \`WebGPU: pipeline "\${ desc.label }" failed asynchronously: \${ message }\` );
+				reportGPUError( \`WebGPU pipeline failed: \${ desc.label }\`, message );
 
 			} );
 
