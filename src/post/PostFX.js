@@ -226,7 +226,7 @@ ${ taps }
 
 		// the medium of each pixel's lens
 		this._mediumPass = new FullscreenPass( {
-			label: 'medium', colorFormats: [ 'r8unorm' ], modules: [ uw.module ],
+			label: 'medium', colorFormats: [ 'r8unorm' ], modules: [ uw.compositeBaseModule ],
 			code: 'fn fragment( in: FSIn ) -> vec4f { return vec4f( underwaterMedium( in.uv ), 0.0, 0.0, 1.0 ); }',
 		} );
 
