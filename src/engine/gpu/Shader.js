@@ -544,7 +544,7 @@ export function composeShader( { modules = [], bindings = {}, code = '', defines
 		stageOf = {};
 		for ( const k in specs ) stageOf[ k ] = used.has( k ) ? 'compute' : 'none';
 
-	} else if ( stage === 'render' && /@vertex\\s+fn\\s+vs\\b/.test( code ) ) {
+	} else if ( stage === 'render' && /@vertex\s+fn\s+vs\b/.test( code ) ) {
 
 		// bindings only one entry point can reach are declared for that stage only (per-stage limits:
 		// 12 uniform buffers, 16 sampled textures on some adapters)
