@@ -72,14 +72,18 @@ export class App {
 
 	constructor() {
 
+		this.qs = new URLSearchParams( location.search );
+		const cores = Number( navigator.hardwareConcurrency ) || 0;
+		const memory = Number( navigator.deviceMemory ) || 0;
+		// Conservative defaults on lower-resource laptops; add ?low to force this profile.
+		this.lowPower = this.qs.has( 'low' ) || ( cores > 0 && cores <= 4 ) || ( memory > 0 && memory <= 4 );
 		this.settings = {
 			timeOfDay: 16.2,
 			sunAzimuth: 0, // degrees: turns the sun's daily path about the vertical
 			timeSpeed: 0, // hours per real second
 			exposure: 0.55,
-			renderScale: 1, // internal resolution (the temporal upscaler reconstructs the output), Performance tab
+			renderScale: this.lowPower ? 0.55 : 0.75, // lower internal resolution reduces GPU cost
 		};
-		this.qs = new URLSearchParams( location.search );
 
 	}
 
@@ -117,7 +121,8 @@ export class App {
 		if ( ! qs.has( 'noClouds' ) ) {
 
 			// sky-pro-webgpu's clouds ("Partly cloudy"); ?oldClouds: the previous ones
-			this.clouds = qs.has( 'oldClouds' ) ? new Clouds( renderer, this.atmosphere ) : new SkyProClouds( renderer, this.atmosphere );
+			const useLegacyClouds = qs.has( 'oldClouds' ) || ( this.lowPower && ! qs.has( 'newClouds' ) );
+			this.clouds = useLegacyClouds ? new Clouds( renderer, this.atmosphere ) : new SkyProClouds( renderer, this.atmosphere );
 			if ( this.clouds.ready ) await this.clouds.ready;
 			this.sky.clouds = this.clouds;
 
@@ -127,7 +132,7 @@ export class App {
 		// contact-hardening filter sized by the sun's disc on the near cascade. Each cascade's depth range
 		// is its light margin (200 m) + its extent, which keeps the depth bias small in metres.
 		// Shadows come from the opaque and the late (transparent-pass) layers.
-		this.csm = this.shadows = new SunShadows( { size: 2048, splits: [ 10, 60, 400 ], lightMargin: 200, normalBias: [ 0.015, 0.06, 0.3 ], bias: 0.00002 } );
+		this.csm = this.shadows = new SunShadows( { size: this.lowPower ? 1024 : 2048, splits: [ 10, 60, 400 ], lightMargin: 200, normalBias: [ 0.015, 0.06, 0.3 ], bias: 0.00002 } );
 		this.shadows.layerMask = ( 1 << LAYERS.OPAQUE ) | ( 1 << LAYERS.TRANSPARENT );
 
 		this.environment = new Environment( renderer, scene, this.sky );
@@ -326,13 +331,13 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 		// is seen from where the triangle facing can't be trusted
 		this.waterMaterial.cameraWaterHeightNode = this.query.cameraState().x;
 		// aerial perspective, marine haze and volumetric sun shafts (post)
-		this.haze = qs.has( 'noHaze' ) ? null : new AirHaze( {
+		this.haze = ( qs.has( 'noHaze' ) || this.lowPower ) ? null : new AirHaze( {
 			depthTexture: this.sceneRenderer.sceneRT.depthTexture, underwater: this.underwater, atmosphere: this.atmosphere,
 			sky: this.sky, clouds: this.clouds, terrain: this.terrainGPU, csm: this.csm,
 		} );
 		this.post = new PostFX( renderer, { sceneRenderer: this.sceneRenderer, camera, underwater: this.underwater, clouds: this.clouds, sunDir: this.atmosphere.sunDir, haze: this.haze } );
 		G.exposure.value = this.settings.exposure;
-		if ( qs.has( 'scale' ) ) this.settings.renderScale = Number( qs.get( 'scale' ) ) || 1;
+		if ( qs.has( 'scale' ) ) this.settings.renderScale = Number( qs.get( 'scale' ) ) || this.settings.renderScale;
 		this.setRenderScale( this.settings.renderScale );
 
 		// ---------------------------------------------------------------- audio
