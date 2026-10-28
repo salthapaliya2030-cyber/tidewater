@@ -106,7 +106,12 @@ export class PostFX {
 		// over a large screen radius, and the full-res reads were mostly cache misses. Half float: the
 		// taps are bandwidth bound, and reversed-Z depth keeps its relative precision in fp16 (~5 mm at
 		// 10 m) where the AO radius matters
+		this.aoEnabled = ( GPU.limits?.maxSampledTexturesPerShaderStage ?? 32 ) >= 24;
 		this.aoDepth = new RenderTarget( 1, 1, { colors: [ 'r16float' ], label: 'aoDepth' } );
+		this.aoBlurX = new RenderTarget( 1, 1, { colors: [ 'r16float' ], label: 'aoBlurX' } );
+		this.aoBlurY = new RenderTarget( 1, 1, { colors: [ 'r16float' ], label: 'aoBlurY' } );
+		if ( this.aoEnabled ) {
+
 		this._aoDepthPass = new FullscreenPass( {
 			label: 'AO depth',
 			colorFormats: [ 'r16float' ],
@@ -135,8 +140,6 @@ fn fragment( in: FSIn ) -> vec4f {
 		// directions over a 5x5 pattern and jitters its steps per pixel and per frame, which only the
 		// temporal resolve averaged out; where it can't accumulate (the rocking helm, fast turns) that
 		// noise flickered
-		this.aoBlurX = new RenderTarget( 1, 1, { colors: [ 'r16float' ], label: 'aoBlurX' } );
-		this.aoBlurY = new RenderTarget( 1, 1, { colors: [ 'r16float' ], label: 'aoBlurY' } );
 		const aoBlur = ( src, dx, dy ) => {
 
 			let taps = '';
@@ -173,6 +176,16 @@ ${ taps }
 
 		this._aoBlurXPass = aoBlur( () => this.aoPass.texture, 1, 0 );
 		this._aoBlurYPass = aoBlur( () => this.aoBlurX.texture, 0, 1 );
+
+		} else {
+
+			// Keep empty target textures for interface stability, without compiling AO passes.
+			this.aoPass = null;
+			this._aoDepthPass = null;
+			this._aoBlurXPass = null;
+			this._aoBlurYPass = null;
+
+		}
 
 		// medium at the near clip plane per pixel (the waterline on the lens), then the composite
 		this.medium = new RenderTarget( 1, 1, { colors: [ 'r8unorm' ], label: 'medium' } );
@@ -295,7 +308,7 @@ fn postColorAO( uv: vec2f ) -> vec3f {
 }
 
 fn postSceneSample( uv: vec2f ) -> vec3f {
-	${ haze ? 'return hazeApply( uv, vec4f( postColorAO( uv ), 1.0 ) ).rgb;' : 'return postColorAO( uv );' }
+	${ haze ? ( this.aoEnabled ? 'return hazeApply( uv, vec4f( postColorAO( uv ), 1.0 ) ).rgb;' : 'return hazeApply( uv, vec4f( textureSampleLevel( postScene, smpLinearClamp, uv, 0.0 ).rgb, 1.0 ) ).rgb;' ) : ( this.aoEnabled ? 'return postColorAO( uv );' : 'return textureSampleLevel( postScene, smpLinearClamp, uv, 0.0 ).rgb;' ) }
 }
 
 fn fragment( in: FSIn ) -> vec4f {
@@ -305,7 +318,7 @@ fn fragment( in: FSIn ) -> vec4f {
 		} );
 
 		// build the lazily built passes now (the profiler tracks them after beginFrame)
-		if ( ! this.aoPass._pass ) this.aoPass._build();
+		if ( this.aoEnabled && ! this.aoPass._pass ) this.aoPass._build();
 		if ( haze && ! haze._passes ) haze._build();
 		if ( uw.renderShafts ) void uw.shaftPass;
 
@@ -567,12 +580,16 @@ fn fragment( in: FSIn ) -> vec4f {
 		this.medium.setSize( iw, ih );
 		if ( this.underwater.setSize ) this.underwater.setSize( iw, ih );
 		// rtt resolution scales of the original are relative to the drawing buffer (output) size
-		this.aoPass.resolutionScale = 0.5 * this.scale;
-		this.aoPass.setSize( ow, oh );
-		const aw = Math.round( ow * 0.5 * this.scale ), ah = Math.round( oh * 0.5 * this.scale );
-		this.aoDepth.setSize( aw, ah );
-		this.aoBlurX.setSize( aw, ah );
-		this.aoBlurY.setSize( aw, ah );
+		if ( this.aoEnabled ) {
+
+			this.aoPass.resolutionScale = 0.5 * this.scale;
+			this.aoPass.setSize( ow, oh );
+			const aw = Math.round( ow * 0.5 * this.scale ), ah = Math.round( oh * 0.5 * this.scale );
+			this.aoDepth.setSize( aw, ah );
+			this.aoBlurX.setSize( aw, ah );
+			this.aoBlurY.setSize( aw, ah );
+
+		}
 		if ( this.haze ) this.haze.setSize( ow, oh );
 		this.taau.setSize( ow, oh );
 		if ( this.bloomDown ) {
@@ -648,10 +665,14 @@ fn fragment( in: FSIn ) -> vec4f {
 		if ( ! this._built ) this.beginFrame();
 		const T = this._timers || null;
 		this.motionBlur.compute( this._outW, this._outH );
-		this._aoDepthPass.render( { colorViews: [ this.aoDepth.texture ], clear: CLR } );
-		this.aoPass.render();
-		this._aoBlurXPass.render( { colorViews: [ this.aoBlurX.texture ], clear: CLR } );
-		this._aoBlurYPass.render( { colorViews: [ this.aoBlurY.texture ], clear: CLR } );
+		if ( this.aoEnabled ) {
+
+			this._aoDepthPass.render( { colorViews: [ this.aoDepth.texture ], clear: CLR } );
+			this.aoPass.render();
+			this._aoBlurXPass.render( { colorViews: [ this.aoBlurX.texture ], clear: CLR } );
+			this._aoBlurYPass.render( { colorViews: [ this.aoBlurY.texture ], clear: CLR } );
+
+		}
 		this._mediumPass.render( { colorViews: [ this.medium.texture ], clear: CLR } );
 		// caustic shafts / torch beam march (half res): only while the lens can be under water (the CPU
 		// water height lags the GPU's by a frame: 1 m of margin)
@@ -697,8 +718,8 @@ fn fragment( in: FSIn ) -> vec4f {
 	// every pass with its GPU object, for the profiler: [ name, pass ]
 	passes() {
 
-		const list = [ [ 'motion blur tiles', this.motionBlur.tileKernel ], [ 'motion blur neighbours', this.motionBlur.neighborKernel ],
-			[ 'GTAO', this.aoPass._pass ], [ 'AO blur x', this._aoBlurXPass ], [ 'AO blur y', this._aoBlurYPass ], [ 'medium', this._mediumPass ] ];
+		const list = [ [ 'motion blur tiles', this.motionBlur.tileKernel ], [ 'motion blur neighbours', this.motionBlur.neighborKernel ], [ 'medium', this._mediumPass ] ];
+		if ( this.aoEnabled ) list.splice( 2, 0, [ 'GTAO', this.aoPass._pass ], [ 'AO blur x', this._aoBlurXPass ], [ 'AO blur y', this._aoBlurYPass ] );
 		if ( this.haze && this.haze._passes ) {
 
 			list.push( [ 'haze march', this.haze._passes.march ], [ 'haze sun mask', this.haze._passes.mask ] );
