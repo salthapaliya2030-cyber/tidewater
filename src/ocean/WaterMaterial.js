@@ -5,6 +5,22 @@ import { REFRACTION_GUARD } from './RefractionPass.js';
 
 const IOR = 1.333;
 
+function makeLowTextureSurface( surface ) {
+
+	// Preserve the original FFT, CDLOD and uniform block, but omit optional fragment textures.
+	// Object.create keeps WaterSurface's lazy module getter while this variant owns its own cache.
+	const variant = Object.assign( Object.create( Object.getPrototypeOf( surface ) ), surface );
+	variant.terrain = null;
+	variant.shore = null;
+	variant.wake = null;
+	variant.detail = null;
+	variant.shoreSim = null;
+	variant.foamShading = null;
+	variant._module = null;
+	return variant;
+
+}
+
 // WGSL helpers shared with other water effects (Breakers, spray):
 //   fn fresnelDielectric( cosI: f32, eta: f32 ) -> f32   exact unpolarized dielectric Fresnel, cosI > 0, eta = n2/n1
 //   fn waterPhaseHG( cosT: f32, g: f32 ) -> f32           Henyey-Greenstein
@@ -150,12 +166,13 @@ export class WaterMaterial extends Material {
 	_build() {
 
 		this._built = true;
-		const S = this.waterSurface;
-		const sky = this.sky;
-		// Limit fragment-stage textures on adapters with fewer than 24 slots. The core water surface
-		// remains, while costly optional features are excluded at shader-build time (not just hidden
-		// behind runtime branches, which still count against WebGPU's per-stage limit).
+		// Limit fragment-stage textures on adapters with fewer than 24 slots. Build a per-material
+		// water-surface variant with terrain / shore / wake / detail dependencies removed; don't mutate
+		// the shared WaterSurface, which other systems use for simulation and queries.
 		const lowTextureBudget = ( GPU.limits?.maxSampledTexturesPerShaderStage ?? 16 ) < 24;
+		const baseSurface = this.waterSurface;
+		const S = lowTextureBudget ? makeLowTextureSurface( baseSurface ) : baseSurface;
+		const sky = this.sky;
 		const T = ! lowTextureBudget && !! S.terrain;
 		const SH = ! lowTextureBudget && !! S.shore;
 		const SIM = ! lowTextureBudget && !! S.shoreSim;
