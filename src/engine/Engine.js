@@ -85,7 +85,34 @@ export class Engine {
 			let dt = this.clock.getDelta();
 			if ( dt > 0.1 ) dt = 0.1;
 			this.frame ++;
-			update( dt, this.clock.getElapsed() );
+			try {
+
+				update( dt, this.clock.getElapsed() );
+
+			} catch ( error ) {
+
+				// A frame error used to stop requestAnimationFrame silently, leaving the UI over a black canvas.
+				// Show the actual runtime / WebGPU pipeline error on screen so it can be diagnosed without DevTools.
+				console.error( 'Tidewater frame stopped:', error );
+				this.stop();
+				if ( ! document.getElementById( 'tidewater-runtime-error' ) ) {
+
+					const panel = document.createElement( 'div' );
+					panel.id = 'tidewater-runtime-error';
+					panel.setAttribute( 'role', 'alert' );
+					panel.style.cssText = 'position:fixed;z-index:2147483647;left:16px;right:16px;bottom:16px;max-height:45vh;overflow:auto;box-sizing:border-box;padding:16px 18px;border:1px solid #e37b7b;border-radius:10px;background:rgba(20,12,16,.97);color:#fff;font:13px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace;white-space:pre-wrap;overflow-wrap:anywhere;box-shadow:0 8px 32px #0008;';
+					const heading = document.createElement( 'strong' );
+					heading.textContent = 'Tidewater stopped rendering';
+					heading.style.cssText = 'display:block;font:600 15px/1.4 system-ui,sans-serif;margin-bottom:8px;color:#ffb4b4';
+					const detail = document.createElement( 'div' );
+					detail.textContent = String( error && ( error.stack || error.message ) || error );
+					panel.append( heading, detail );
+					document.body.appendChild( panel );
+
+				}
+				return;
+
+			}
 			this._raf = requestAnimationFrame( loop );
 
 		};
