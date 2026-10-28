@@ -330,6 +330,7 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 			depthTexture: this.sceneRenderer.sceneRT.depthTexture, maskTexture: this.sceneRenderer.waterMaskTexture,
 			query: this.query, caustics: this.caustics, fft: this.fft,
 		} );
+		this.underwater.shaftsEnabled = ! this.lowPower;
 		// the camera's height above the water in the same frame (GPU query): decides the side the surface
 		// is seen from where the triangle facing can't be trusted
 		this.waterMaterial.cameraWaterHeightNode = this.query.cameraState().x;
