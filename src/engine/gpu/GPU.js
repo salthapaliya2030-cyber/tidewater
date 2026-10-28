@@ -255,8 +255,8 @@ export const GPU = {
 				h.failed = true;
 				h.error = e;
 				const message = String( e && ( e.message || e ) ).split( '\n' ).slice( 0, 10 ).join( '\n' );
-				console.error( \`WebGPU: pipeline "\${ desc.label }" failed asynchronously: \${ message }\` );
-				reportGPUError( \`WebGPU pipeline failed: \${ desc.label }\`, message );
+				console.error( `WebGPU: pipeline "${ desc.label }" failed asynchronously: ${ message }` );
+				reportGPUError( `WebGPU pipeline failed: ${ desc.label }`, message );
 
 			} );
 
