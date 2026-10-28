@@ -199,7 +199,8 @@ export const GPU = {
 			}, ( e ) => {
 
 				h.failed = true;
-				console.error( `WebGPU: pipeline "${ desc.label }" failed: ${ e.message.split( '\n' ).slice( 0, 6 ).join( '\n' ) }` );
+				h.error = e;
+				console.error( `WebGPU: pipeline "${ desc.label }" failed asynchronously: ${ e.message.split( '\n' ).slice( 0, 6 ).join( '\n' ) }` );
 
 			} );
 
@@ -212,10 +213,21 @@ export const GPU = {
 	// the pipeline now (synchronous compile when the async one has not finished)
 	ready( h ) {
 
-		if ( h.pipeline || h.failed ) return h.pipeline;
+		if ( h.pipeline ) return h.pipeline;
 		this.syncCompiles.push( h.label );
-		h.pipeline = h.kind === 'render' ? this.device.createRenderPipeline( h.desc ) : this.device.createComputePipeline( h.desc );
-		return h.pipeline;
+		try {
+
+			h.pipeline = h.kind === 'render' ? this.device.createRenderPipeline( h.desc ) : this.device.createComputePipeline( h.desc );
+			h.failed = false;
+			h.desc = null;
+			return h.pipeline;
+
+		} catch ( e ) {
+
+			const asyncDetail = h.error && h.error.message ? ` Async compilation: ${ h.error.message.split( '\n' ).slice( 0, 4 ).join( '\n' ) }` : '';
+			throw new Error( `WebGPU pipeline "${ h.label }" failed to compile: ${ e.message.split( '\n' ).slice( 0, 8 ).join( '\n' ) }.${ asyncDetail }` );
+
+		}
 
 	},
 
