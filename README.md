@@ -7,6 +7,10 @@ breach. It runs directly on WebGPU and WGSL with its own small rendering engine,
 
 **Play it:** https://dgreenheck.github.io/tidewater/
 
+**Deploy your own copy:** [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fsalthapaliya2030-cyber%2Ftidewater)
+
+*The button imports this repository into your own Vercel account. GitHub/Vercel sign-in or authorization may be required.*
+
 ![Fishing off the pier at golden hour](docs/screenshot.jpg)
 
 ![The beach in the late afternoon](docs/screenshot-beach.jpg)
