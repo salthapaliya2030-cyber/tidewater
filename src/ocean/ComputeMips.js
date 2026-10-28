@@ -67,14 +67,14 @@ ${ codeA }
 				label: label + ' mips A5',
 				bindings: { src4: src( 4 ), out5: out( 5 ) },
 				workgroupSize: [ 8, 8, 1 ],
-				code: /* wgsl */\`
+				code: /* wgsl */`
 @compute @workgroup_size( WG_X, WG_Y, WG_Z )
 fn main( @builtin( global_invocation_id ) gid: vec3u ) {
-	if ( gid.x >= \${ w5 }u || gid.y >= \${ w5 }u ) { return; }
+	if ( gid.x >= ${ w5 }u || gid.y >= ${ w5 }u ) { return; }
 	let p = vec2u( gid.xy ) * 2u;
 	let v = ( textureLoad( src4, p, gid.z, 0 ) + textureLoad( src4, p + vec2u( 1u, 0u ), gid.z, 0 ) + textureLoad( src4, p + vec2u( 0u, 1u ), gid.z, 0 ) + textureLoad( src4, p + vec2u( 1u, 1u ), gid.z, 0 ) ) * 0.25;
 	textureStore( out5, gid.xy, gid.z, v );
-}\`,
+}`,
 			} );
 
 		}
