@@ -206,7 +206,7 @@ export const GPU = {
 
 	_drainCompileQueue() {
 
-		const limit = ( this.limits?.maxSampledTexturesPerShaderStage ?? 32 ) < 24 ? 3 : 8;
+		const limit = ( this.limits?.maxSampledTexturesPerShaderStage ?? 32 ) < 24 ? 1 : 8;
 		while ( this._activeCompiles < limit && this._compileQueue.length ) {
 
 			const task = this._compileQueue.shift();
