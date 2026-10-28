@@ -536,9 +536,9 @@ export function composeShader( { modules = [], bindings = {}, code = '', defines
 		// Compute modules often bring along resources for helpers that a particular kernel never
 		// calls. Include only resources reachable from that kernel's entry point in its stage limits.
 		let all = '';
-		for ( const m of mods ) all += m.code + '\\n';
+		for ( const m of mods ) all += m.code + '\n';
 		const full = preprocess( all + code, defines );
-		const match = /@compute\\b[^{};]*?\\bfn\\s+(\\w+)\\s*\\(/s.exec( code );
+		const match = /@compute\b[^{};]*?\bfn\s+(\w+)\s*\(/s.exec( code );
 		const entry = entryPoint || ( match ? match[ 1 ] : 'main' );
 		const used = reachableIdentifiers( full, entry );
 		stageOf = {};
